@@ -909,7 +909,10 @@ function showResults() {
                 <p><strong>問題:</strong> ${resultItem.question}</p>
                 <p><strong>あなたの解答:</strong> ${resultItem.selectedAnswer}</p>
                 <p><strong>正解:</strong> ${resultItem.correctAnswer}</p>
-                <p class="wpm-display">${Math.round(resultItem.wpm)} WPM (音読時間: ${resultItem.readingTime.toFixed(1)}秒)</p>
+                <p><strong>音読チェック結果:</strong></p>
+                <p style="margin-left: 20px;">• 音読時間: ${resultItem.readingTime.toFixed(1)}秒</p>
+                <p style="margin-left: 20px;">• 解答時間: ${resultItem.answerTime.toFixed(1)}秒</p>
+                <p style="margin-left: 20px;">• 読む速さ: ${Math.round(resultItem.wpm)} ワード/分 (WPM)</p>
             </div>
         `;
     });

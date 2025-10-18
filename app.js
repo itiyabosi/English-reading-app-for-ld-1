@@ -296,9 +296,7 @@ function displayQuestion() {
     elements.startRecordingBtn.classList.remove('hidden');
     elements.stopRecordingBtn.classList.add('hidden');
 
-    // 音声認識状態を非表示
-    elements.recognitionStatus.classList.add('hidden');
-    elements.recognitionResult.classList.add('hidden');
+    // フィードバックのみ非表示（音声認識結果は残す）
     elements.feedback.classList.add('hidden');
 
     // 音読状態リセット
@@ -488,7 +486,7 @@ function checkIfReadingComplete() {
 
         // 音声認識は継続（解答まで）
         elements.readingInstruction.textContent = '';
-        elements.recognitionText.textContent = '音読完了 ✓';
+        elements.recognitionText.textContent = '';
     }
 }
 

@@ -181,6 +181,23 @@ function getUserId() {
     return userId;
 }
 
+function getCustomUserId() {
+    return localStorage.getItem('customUserId') || '';
+}
+
+function setCustomUserId(customId) {
+    if (customId && customId.trim()) {
+        localStorage.setItem('customUserId', customId.trim());
+        return true;
+    }
+    return false;
+}
+
+function getDisplayUserId() {
+    const customId = getCustomUserId();
+    return customId || getUserId();
+}
+
 function getBrowserInfo() {
     return {
         userAgent: navigator.userAgent,
@@ -911,9 +928,16 @@ function showResults() {
     // スコアを保存
     saveScore(scoreData);
 
-    // ユーザーID表示
-    const currentUserId = getUserId();
-    elements.currentUserId.textContent = currentUserId;
+    // ユーザーID表示（カスタムIDがあればそれを表示、なければランダムID）
+    const displayId = getDisplayUserId();
+    const originalId = getUserId();
+    const customId = getCustomUserId();
+
+    if (customId) {
+        elements.currentUserId.textContent = customId;
+    } else {
+        elements.currentUserId.textContent = originalId;
+    }
 
     console.log('✓ 結果表示完了');
 }
@@ -952,7 +976,9 @@ async function saveScoreToFirebase(scoreData) {
 
     try {
         const dataToSave = {
-            userId: getUserId(),
+            userId: getUserId(),              // 元のランダムID
+            customUserId: getCustomUserId(),  // ユーザーが設定したカスタムID
+            displayUserId: getDisplayUserId(), // 表示用ID（カスタムIDがあればそれ、なければランダムID）
             ...scoreData,
             browser: getBrowserInfo(),
             timestamp: new Date()
@@ -1129,8 +1155,8 @@ function displayProgressChart() {
         return;
     }
 
-    // ユーザーID表示
-    elements.userIdDisplay.textContent = `ユーザーID: ${getUserId()}`;
+    // ユーザーID表示（カスタムIDがあればそれを表示）
+    elements.userIdDisplay.textContent = `ユーザーID: ${getDisplayUserId()}`;
 
     // グラフデータ準備
     const chartData = scores.map((scoreItem, index) => {
@@ -1289,35 +1315,41 @@ function resetQuiz() {
 }
 
 // ========================================
-// 33. ユーザーID読み込み
+// 33. カスタムユーザーID設定
 // ========================================
 function loadUserId() {
-    const inputUserId = elements.userIdInput.value.trim();
+    const inputCustomId = elements.userIdInput.value.trim();
 
-    if (!inputUserId) {
+    if (!inputCustomId) {
         elements.userIdMessage.textContent = '❌ ユーザーIDを入力してください';
         elements.userIdMessage.style.color = '#dc3545';
         return;
     }
 
-    // ユーザーIDを保存
-    localStorage.setItem('userId', inputUserId);
+    // カスタムユーザーIDを設定
+    const success = setCustomUserId(inputCustomId);
 
-    // 表示更新
-    elements.currentUserId.textContent = inputUserId;
-    elements.userIdMessage.textContent = '✓ ユーザーIDを読み込みました';
-    elements.userIdMessage.style.color = '#28a745';
+    if (success) {
+        // 表示更新
+        elements.currentUserId.textContent = inputCustomId;
+        elements.userIdMessage.textContent = '✓ カスタムIDを設定しました';
+        elements.userIdMessage.style.color = '#28a745';
 
-    console.log('ユーザーID読み込み:', inputUserId);
+        console.log('カスタムID設定:', inputCustomId);
+        console.log('元のID:', getUserId());
+    } else {
+        elements.userIdMessage.textContent = '❌ IDの設定に失敗しました';
+        elements.userIdMessage.style.color = '#dc3545';
+    }
 }
 
 // ========================================
 // 34. ユーザーIDコピー
 // ========================================
 function copyUserId() {
-    const currentUserId = getUserId();
+    const displayId = getDisplayUserId();
 
-    navigator.clipboard.writeText(currentUserId).then(() => {
+    navigator.clipboard.writeText(displayId).then(() => {
         elements.userIdMessage.textContent = '✓ ユーザーIDをコピーしました';
         elements.userIdMessage.style.color = '#28a745';
 

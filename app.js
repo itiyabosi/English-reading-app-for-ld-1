@@ -194,6 +194,7 @@ function setCustomUserId(customId) {
 }
 
 function getDisplayUserId() {
+    // カスタムIDを優先。カスタムIDがなければランダムIDを返す
     const customId = getCustomUserId();
     return customId || getUserId();
 }

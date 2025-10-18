@@ -272,8 +272,8 @@ function displayQuestion() {
     // タイマーリセット
     elements.timer.textContent = '0.0秒';
 
-    // 指示テキスト
-    elements.readingInstruction.textContent = '「測定開始」ボタンを押して、文章を声に出して読んでください';
+    // 指示テキストは非表示
+    elements.readingInstruction.textContent = '';
 
     // 文章表示
     elements.passage.textContent = questionData.passage;
@@ -404,8 +404,8 @@ function startRecording() {
     elements.recognitionText.textContent = '音声を認識中...';
     elements.recognizedText.textContent = '';
 
-    // 指示更新
-    elements.readingInstruction.textContent = '文章を声に出して読んでください（80%読むと自動で完了検出されます）';
+    // 指示は表示しない
+    elements.readingInstruction.textContent = '';
 
     try {
         app.recognition.start();
@@ -487,8 +487,8 @@ function checkIfReadingComplete() {
         console.log('✓ 音読完了を検出しました (', Math.round(completionRatio * 100), '%)');
 
         // 音声認識は継続（解答まで）
-        elements.readingInstruction.textContent = '音読完了！問題に答えてください';
-        elements.recognitionText.textContent = '音読完了 ✓ - 認識は継続中です';
+        elements.readingInstruction.textContent = '';
+        elements.recognitionText.textContent = '音読完了 ✓';
     }
 }
 

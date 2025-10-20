@@ -1,12 +1,12 @@
 // ========================================
 // 英語音読トレーニングアプリ - メインスクリプト
-// バージョン: 2.00
+// バージョン: 2.10 - Performance Enhanced
 // ========================================
 
 // ========================================
 // 1. 定数定義
 // ========================================
-const APP_VERSION = "2.00";
+const APP_VERSION = "2.10";
 
 // Firebase設定（後で設定してください）
 const firebaseConfig = {
@@ -33,7 +33,9 @@ const app = {
     recognizedText: '',
     isRecording: false,
     recognitionHistory: [],
-    questionStartTime: null
+    questionStartTime: null,
+    timerInterval: null,  // タイマー用インターバル
+    levenshteinCache: {}  // レーベンシュタイン距離のキャッシュ
 };
 
 // Firebase関連
@@ -226,9 +228,7 @@ async function generateQuestions() {
         }
     }
 
-    // ローディングを少し表示（UX向上）
-    await new Promise(resolve => setTimeout(resolve, 500));
-
+    // ローディング表示を即座に非表示（性能向上）
     elements.loading.classList.add('hidden');
     console.log('✓ 問題生成完了:', app.questions.length, '問');
 }
@@ -299,16 +299,18 @@ function displayQuestion() {
     // 問題文表示
     elements.questionText.textContent = questionData.question;
 
-    // 選択肢表示
+    // 選択肢表示（DocumentFragmentで最適化）
     elements.choices.innerHTML = '';
+    const fragment = document.createDocumentFragment();
     questionData.choices.forEach((choiceText, index) => {
         const choiceButton = document.createElement('button');
         choiceButton.className = 'choice';
         choiceButton.textContent = choiceText;
         choiceButton.setAttribute('data-index', index);
-        choiceButton.addEventListener('click', () => handleAnswer(index));
-        elements.choices.appendChild(choiceButton);
+        choiceButton.addEventListener('click', () => handleAnswer(index), { once: true });  // メモリリーク防止
+        fragment.appendChild(choiceButton);
     });
+    elements.choices.appendChild(fragment);
 
     // ボタン状態リセット
     elements.startRecordingBtn.classList.remove('hidden');
@@ -324,6 +326,7 @@ function displayQuestion() {
     app.recognizedText = '';
     app.recognitionHistory = [];
     app.isRecording = false;
+    app.levenshteinCache = {};  // キャッシュクリア
 
     console.log('✓ 問題表示完了');
 }
@@ -343,6 +346,7 @@ function initSpeechRecognition() {
     app.recognition.lang = 'en-US';
     app.recognition.continuous = true;
     app.recognition.interimResults = true;
+    app.recognition.maxAlternatives = 3;  // 精度向上のため複数候補を取得
 
     app.recognition.onresult = (event) => {
         let interimTranscript = '';
@@ -362,15 +366,16 @@ function initSpeechRecognition() {
             app.recognitionHistory.push(finalTranscript.trim());
         }
 
-        // リアルタイム表示更新
-        const displayText = app.recognizedText + interimTranscript;
-        elements.recognizedText.textContent = displayText;
+        // リアルタイム表示更新（requestAnimationFrameで最適化）
+        requestAnimationFrame(() => {
+            const displayText = app.recognizedText + interimTranscript;
+            elements.recognizedText.textContent = displayText;
+        });
 
-        // 読了チェック
-        checkIfReadingComplete();
-
-        // タイマー更新
-        updateTimer();
+        // 読了チェック（finalTranscriptがある時のみ）
+        if (finalTranscript) {
+            checkIfReadingComplete();
+        }
     };
 
     app.recognition.onerror = (event) => {
@@ -423,6 +428,9 @@ function startRecording() {
     // 指示は表示しない
     elements.readingInstruction.textContent = '';
 
+    // タイマー開始
+    startTimer();
+
     try {
         app.recognition.start();
         console.log('✓ 音声認識スタート');
@@ -440,6 +448,9 @@ function stopRecording() {
     console.log('=== 音声認識停止 ===');
 
     app.isRecording = false;
+
+    // タイマー停止
+    stopTimer();
 
     if (app.recognition) {
         try {
@@ -469,14 +480,32 @@ function stopRecording() {
 }
 
 // ========================================
-// 13. タイマー更新
+// 13. タイマー更新（インターバルベース - 性能向上）
 // ========================================
-function updateTimer() {
-    if (!app.readingStartTime) return;
+function startTimer() {
+    // 既存のタイマーをクリア
+    if (app.timerInterval) {
+        clearInterval(app.timerInterval);
+    }
 
-    const currentTime = Date.now();
-    const elapsedSeconds = (currentTime - app.readingStartTime) / 1000;
-    elements.timer.textContent = `${elapsedSeconds.toFixed(1)}秒`;
+    // 100msごとに更新（10FPS）で性能とUXのバランス
+    app.timerInterval = setInterval(() => {
+        if (!app.readingStartTime) {
+            clearInterval(app.timerInterval);
+            return;
+        }
+
+        const currentTime = Date.now();
+        const elapsedSeconds = (currentTime - app.readingStartTime) / 1000;
+        elements.timer.textContent = `${elapsedSeconds.toFixed(1)}秒`;
+    }, 100);
+}
+
+function stopTimer() {
+    if (app.timerInterval) {
+        clearInterval(app.timerInterval);
+        app.timerInterval = null;
+    }
 }
 
 // ========================================
@@ -738,34 +767,64 @@ function isSimilar(word1, word2) {
 }
 
 // ========================================
-// 20. レーベンシュタイン距離
+// 20. レーベンシュタイン距離（キャッシュ付き - 性能向上）
 // ========================================
 function levenshteinDistance(str1, str2) {
+    // キャッシュキーを生成
+    const cacheKey = `${str1}|${str2}`;
+
+    // キャッシュに存在すれば即座に返す
+    if (app.levenshteinCache[cacheKey] !== undefined) {
+        return app.levenshteinCache[cacheKey];
+    }
+
     const len1 = str1.length;
     const len2 = str2.length;
 
-    const distanceMatrix = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
-
-    for (let i = 0; i <= len1; i++) {
-        distanceMatrix[i][0] = i;
+    // 早期リターン: 片方が空文字列の場合
+    if (len1 === 0) {
+        app.levenshteinCache[cacheKey] = len2;
+        return len2;
+    }
+    if (len2 === 0) {
+        app.levenshteinCache[cacheKey] = len1;
+        return len1;
     }
 
+    // メモリ効率化: 2行のみ使用（O(n*m) → O(min(n,m))）
+    let prevRow = Array(len2 + 1).fill(0);
+    let currRow = Array(len2 + 1).fill(0);
+
+    // 初期化
     for (let j = 0; j <= len2; j++) {
-        distanceMatrix[0][j] = j;
+        prevRow[j] = j;
     }
 
     for (let i = 1; i <= len1; i++) {
+        currRow[0] = i;
+
         for (let j = 1; j <= len2; j++) {
             const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-            distanceMatrix[i][j] = Math.min(
-                distanceMatrix[i - 1][j] + 1,      // 削除
-                distanceMatrix[i][j - 1] + 1,      // 挿入
-                distanceMatrix[i - 1][j - 1] + cost // 置換
+            currRow[j] = Math.min(
+                prevRow[j] + 1,          // 削除
+                currRow[j - 1] + 1,      // 挿入
+                prevRow[j - 1] + cost    // 置換
             );
         }
+
+        // 行を入れ替え
+        [prevRow, currRow] = [currRow, prevRow];
     }
 
-    return distanceMatrix[len1][len2];
+    const result = prevRow[len2];
+
+    // キャッシュに保存（最大100エントリ）
+    if (Object.keys(app.levenshteinCache).length > 100) {
+        app.levenshteinCache = {};  // キャッシュクリア
+    }
+    app.levenshteinCache[cacheKey] = result;
+
+    return result;
 }
 
 // ========================================
@@ -947,19 +1006,42 @@ function showResults() {
 }
 
 // ========================================
-// 24. スコア保存
+// 24. スコア保存（最適化版）
 // ========================================
 function saveScore(scoreData) {
     console.log('=== スコア保存開始 ===');
 
-    try {
-        const scores = JSON.parse(localStorage.getItem('scores') || '[]');
-        scores.push(scoreData);
-        localStorage.setItem('scores', JSON.stringify(scores));
-        console.log('✓ ローカルストレージに保存しました');
-    } catch (error) {
-        console.error('ローカルストレージへの保存に失敗:', error);
-    }
+    // LocalStorage保存（非同期化してUIブロックを防ぐ）
+    requestIdleCallback(() => {
+        try {
+            const scores = JSON.parse(localStorage.getItem('scores') || '[]');
+            scores.push(scoreData);
+
+            // データサイズ制限（最新100件まで）
+            if (scores.length > 100) {
+                scores.shift();  // 古いデータを削除
+            }
+
+            localStorage.setItem('scores', JSON.stringify(scores));
+            console.log('✓ ローカルストレージに保存しました');
+        } catch (error) {
+            console.error('ローカルストレージへの保存に失敗:', error);
+
+            // QuotaExceededErrorの場合は古いデータを削除
+            if (error.name === 'QuotaExceededError') {
+                try {
+                    const scores = JSON.parse(localStorage.getItem('scores') || '[]');
+                    const reducedScores = scores.slice(-50);  // 最新50件のみ保持
+                    localStorage.setItem('scores', JSON.stringify(reducedScores));
+                    reducedScores.push(scoreData);
+                    localStorage.setItem('scores', JSON.stringify(reducedScores));
+                    console.log('✓ 古いデータを削除して保存しました');
+                } catch (retryError) {
+                    console.error('リトライも失敗:', retryError);
+                }
+            }
+        }
+    }, { timeout: 1000 });
 
     // Firebase保存（非同期）
     if (elements.consentCheckbox.checked) {

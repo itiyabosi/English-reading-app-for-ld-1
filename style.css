@@ -879,6 +879,9 @@ header h1 {
     .btn {
         padding: 10px 20px;
         font-size: 0.95em;
+        /* タップ領域を広げる */
+        min-height: 44px;
+        min-width: 44px;
     }
 
     .timer {
@@ -887,6 +890,22 @@ header h1 {
 
     #question-number {
         font-size: 1em;
+    }
+
+    /* スマホでの選択肢タップ領域を拡大 */
+    .choice {
+        padding: 18px 20px;
+        font-size: 1.05em;
+        /* タップしやすく */
+        min-height: 50px;
+    }
+
+    /* スマホでのボタンを大きく */
+    #start-recording-btn,
+    #stop-recording-btn {
+        font-size: 1.1em;
+        padding: 15px 30px;
+        min-height: 50px;
     }
 }
 
@@ -912,14 +931,14 @@ header h1 {
 }
 
 /* ========================================
-   19. アニメーション効果
+   19. アニメーション効果（GPU加速最適化）
    ======================================== */
 @keyframes bounce {
     0%, 100% {
-        transform: translateY(0);
+        transform: translateY(0) translateZ(0);
     }
     50% {
-        transform: translateY(-10px);
+        transform: translateY(-10px) translateZ(0);
     }
 }
 
@@ -927,19 +946,31 @@ header h1 {
     animation: none;
 }
 
-/* 正解時のセレブレーション */
+/* 正解時のセレブレーション（GPU加速） */
 @keyframes celebrate {
     0% {
-        transform: scale(1);
+        transform: scale(1) translateZ(0);
     }
     50% {
-        transform: scale(1.1);
+        transform: scale(1.1) translateZ(0);
     }
     100% {
-        transform: scale(1);
+        transform: scale(1) translateZ(0);
     }
 }
 
 .feedback.correct {
     animation: celebrate 0.6s ease-out;
+    will-change: transform;  /* GPU加速ヒント */
+}
+
+/* パフォーマンス最適化: アニメーション中の要素 */
+.choice:hover,
+.btn:hover {
+    will-change: transform;
+}
+
+/* アニメーション終了後のクリーンアップ */
+.feedback.correct:not(:hover) {
+    will-change: auto;
 }
